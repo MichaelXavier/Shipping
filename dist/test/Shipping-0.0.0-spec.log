@@ -1,0 +1,7 @@
+Test suite spec: RUNNING...
+
+Finished in 0.0000 seconds, used 0.0000 seconds of CPU time
+
+0 examples, 0 failures
+Test suite spec: PASS
+Test suite logged to: dist/test/Shipping-0.0.0-spec.log
