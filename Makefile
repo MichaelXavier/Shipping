@@ -18,5 +18,5 @@ install_dependencies: Shipping.cabal
 	$(CABAL) install --only-dependencies
 
 spec: configure_tests
-	PATH=$$PATH:cabal-dev/bin $(CABAL) build
+	PATH=$$PATH:cabal-dev/bin $(CABAL) build > /dev/null
 	$(CABAL) test
