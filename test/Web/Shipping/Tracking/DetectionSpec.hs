@@ -21,6 +21,12 @@ spec = do
 
       it "is exception safe due to guards" $ property $ \(t :: USPSTracking) ->
         isExceptionSafe $ verifyTrackingNumber t
+
+    describe "UPSTracking" $ do
+      it "verifies a valid tracking number" $
+        verifyTrackingNumber (UPSTracking "1Z6W20951326367397") `shouldBe` True
+      -- it "is exception safe due to guards" $ property $ \(t :: UPSTracking) ->
+      --   isExceptionSafe $ verifyTrackingNumber t
   -- describe "detectCarrier USPS" $ do
   --   it "detects the sample checksum in the docs" $
   --     detectCarrier "71123456789123456787" `shouldBe` Just USPS

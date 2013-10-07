@@ -2,9 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Shipping.Tracking.Detection (VerifiableTrackingNumber(..)) where
 
-import ClassyPrelude
+import ClassyPrelude hiding (toUpper)
 import Data.Char ( digitToInt
-                 , isDigit )
+                 , isDigit
+                 , toUpper
+                 , isAlpha
+                 , isAlphaNum )
+import Data.List (cycle)
 import Data.Maybe (isJust, catMaybes)
 import Data.Vector ( (!)
                    , ifoldl' )
@@ -16,11 +20,63 @@ import Web.Shipping.Utils ((<||>))
 
 import Debug.Trace (traceShow)
 
-traceShow'' x = traceShow x x
-
 class VerifiableTrackingNumber a where
   verifyTrackingNumber :: a -> Bool
 
+instance VerifiableTrackingNumber UPSTracking where
+  verifyTrackingNumber (UPSTracking t) | looksOK   = traceShow (givenCD, calculatedCD, total) $ digitToInt givenCD == calculatedCD
+                                       | otherwise = False
+    where (preamble, rest)        = splitAt 2 t'
+          (core, givenCD:_)       = splitAt 15 t'
+          total                   = sum odds + (sum . map (*2)) evens
+          calculatedCD            = case highestMultiple - total of
+                                      10 -> 0
+                                      cd -> cd
+          (evens, odds)           = evensOdds numbers
+          numbers                 = map charValue core
+          charValue c | isAlpha c = fromMaybe 0 $ lookup c matrix
+                      | otherwise = digitToInt c
+          matrix                  = zip ['A'..'Z'] $ [2..9] ++ cycle [0..9]
+          highestMultiple | (total `mod` 10) == 0 = total
+                          | otherwise             = ((total `div` 10) + 1) * 10
+          looksOK = longEnough && correctPreamble && validChars
+          validChars         = all isAlphaNum t
+          longEnough         = length t == 18
+          correctPreamble    = preamble == "1Z"
+          t'      = unpack t
+
+  -- verifyTrackingNumber (UPSTracking t)
+  --   | looksOK   = traceShow (core, digitSum, calculatedCD, givenCD) $ givenCD == calculatedCD
+  --   | otherwise = traceShow (length t, longEnough, correctPreamble, validChars) False
+  --   where looksOK            = longEnough && correctPreamble && validChars
+  --         validChars         = all isAlphaNum t
+  --         longEnough         = length t == 18
+  --         correctPreamble    = preamble == "1Z"
+  --         -- calculatedCD       = case digitSum `divMod` 10 of
+  --         --                        (_, 0) -> 0
+  --         --                        (d, _) -> let nextMultiple = (d + 1) * 10
+-- -- --                         | otherwise             = ((total `div` 10) + 1) * 10
+  --         --                                  in traceShow (nextMultiple, digitSum, nextMultiple `mod` digitSum) $ nextMultiple `mod` digitSum
+
+  --         calculatedCD = case digitSum `mod` 10 of
+  --                          0 -> 0
+  --                          x -> 10 - x
+  --         highestMultiple | (digitSum `mod` 10) == 0 = digitSum
+  --                         | otherwise                = ((digitSum `div` 10) + 1) * 10
+
+  --         digitSum           = ifoldl' digitAdd 0 weightVec
+  --         digitAdd acc i n
+  --           | i == 0    = acc
+  --           | even i    = acc + 2 * n
+  --           | otherwise = acc + n
+  --         weightVec          = fromList . map charWeight $ ('0':base)
+  --         givenCD            = charWeight cdChar
+  --         (core, cdChar:_)   = splitAt 15 . map toUpper $ base
+  --         (preamble, base)   = splitAt 2 $ unpack t
+  --         charWeight c
+  --           | isDigit c = digitToInt c
+  --           | otherwise = fromMaybe 0 $ lookup c matrix
+  --         matrix             = zip ['A'..'Z'] $ [2..9] ++ cycle [0..9]
 
 instance VerifiableTrackingNumber USPSTracking where
   verifyTrackingNumber = verifyUSPSMod10 <||> verifyUSPSMod11
@@ -171,12 +227,12 @@ notDigit = not . isDigit
 -- char2i c | isDigit c = ord c - ord '0'
 --          | otherwise = 0
 
--- evensOdds :: [a] -> ([a], [a])
--- evensOdds xs = (reverse es, reverse os)
---   where (es, os) = evensOdds' 1 xs ([], [])
---         evensOdds' _ [] (evens, odds)       = (evens, odds)
---         evensOdds' num (x:xs) (evens, odds) | even num  = evensOdds' (num + 1) xs (x:evens, odds)
---                                             | otherwise = evensOdds' (num + 1) xs (evens, x:odds)
+evensOdds :: [a] -> ([a], [a])
+evensOdds xs = (reverse es, reverse os)
+  where (es, os) = evensOdds' 1 xs ([], [])
+        evensOdds' _ [] (evens, odds)       = (evens, odds)
+        evensOdds' num (x:xs) (evens, odds) | even num  = evensOdds' (num + 1) xs (x:evens, odds)
+                                            | otherwise = evensOdds' (num + 1) xs (evens, x:odds)
 
 -- stripWS :: Text -> Text
 -- stripWS = T.filter (not . isSpace)

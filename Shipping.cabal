@@ -19,10 +19,13 @@ library
   -- other-modules:       
   Build-Depends:       base >=4.5 && < 4.7,
                        classy-prelude >= 0.6.0 && < 1.0,
+                       containers,
                        bytestring,
                        pcre-light == 0.4.*,
                        lens >= 3.9.1 && < 4.0,
                        text,
+                       xml-conduit >= 1.1.0.7,
+                       xml-lens >= 0.1.4,
                        vector
 
 

@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-unused-imports #-}
 module SpecHelper ( shouldBe
                   , it
                   , describe
@@ -9,12 +10,9 @@ module SpecHelper ( shouldBe
 import ClassyPrelude
 import Control.DeepSeq (NFData)
 import Control.Spoon (spoon)
-import Data.Maybe (isJust)
 import Test.Hspec
 import Test.QuickCheck ( property
                        , Arbitrary(..) )
-
-import Data.ByteString (ByteString(..))
 
 import Web.Shipping.Types
 
@@ -23,3 +21,6 @@ isExceptionSafe = isJust . spoon
 
 instance Arbitrary USPSTracking where
   arbitrary = USPSTracking . pack <$> arbitrary
+
+instance Arbitrary UPSTracking where
+  arbitrary = UPSTracking . pack <$> arbitrary
