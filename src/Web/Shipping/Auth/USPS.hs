@@ -1,11 +1,11 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Web.Shipping.Auth.USPS ( USPSAuth(..)
-                              , HasUSPSAuth(..) ) where
+module Web.Shipping.Auth.USPS ( Auth(..)
+                              , HasAuth(..) ) where
 
 import ClassyPrelude
 import Control.Lens
 
-data USPSAuth = USPSAuth { _uspsUserId :: Text } deriving (Show, Eq)
+data Auth = Auth { _userId :: Text } deriving (Show, Eq)
 
-makeClassy ''USPSAuth
+makeClassy ''Auth

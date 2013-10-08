@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Shipping.XML ( FromXML(..)
                         , ToXML(..)
+                        , parseText
                         , module Text.XML.Lens
                         , tNode
                         , elm
@@ -11,6 +12,7 @@ module Web.Shipping.XML ( FromXML(..)
 
 import ClassyPrelude hiding (Element)
 import Control.Lens
+import Text.XML (parseText)
 import Text.XML.Lens
 
 class FromXML t where

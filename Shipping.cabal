@@ -34,8 +34,10 @@ Test-Suite spec
   Main-Is:        Spec.hs
   Hs-Source-Dirs: src, test
   Build-Depends:  base >=4.5 && < 4.7,
+                  data-default,
                   deepseq,
                   hspec >= 1.6 && < 2.0,
+                  interpolatedstring-perl6,
                   QuickCheck,
                   hspec-expectations,
                   HUnit >= 1.2.5,

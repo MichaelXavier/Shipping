@@ -5,6 +5,7 @@ module SpecHelper ( shouldBe
                   , describe
                   , isExceptionSafe
                   , property
+                  , qc
                   , ByteString
                   , Spec ) where
 import ClassyPrelude
@@ -13,7 +14,7 @@ import Control.Spoon (spoon)
 import Test.Hspec
 import Test.QuickCheck ( property
                        , Arbitrary(..) )
-
+import Text.InterpolatedString.Perl6 (qc)
 import Web.Shipping.Types
 
 isExceptionSafe :: NFData a => a -> Bool
