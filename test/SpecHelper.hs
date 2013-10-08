@@ -3,6 +3,7 @@
 module SpecHelper ( shouldBe
                   , it
                   , describe
+                  , pending
                   , isExceptionSafe
                   , property
                   , qc

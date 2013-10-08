@@ -36,6 +36,7 @@ spec = do
                                           , TrackDetail "9AM Older"
                                           , TrackDetail "10AM Most Recent"
                                           ]
+    it "handles errors" $ pending
 
 parseXML :: FromXML a => LText -> Either Text a
 parseXML txt = case parsed of
