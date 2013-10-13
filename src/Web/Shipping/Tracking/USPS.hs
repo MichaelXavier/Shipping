@@ -67,13 +67,10 @@ data TrackResponse = TrackResponse { _respTrackingNumber :: TrackingNumber
 makeClassy ''TrackResponse
 
 instance FromXML TrackResponseError TrackResponse where
-  fromXML e = case parseError of
-                Left _ -> case parseSuccess of
-                            Left msg      -> Left $ TrackResponseError Nothing msg
-                            Right success -> Right success
-                Right err -> Left err
-    where parseError = fromXML e :: Either Text TrackResponseError
-          parseSuccess = fromXML e :: Either Text TrackResponse
+  fromXML e = either (const parseSuccess) Left parseError
+    where parseSuccess    = either synthesizeError Right $ fromXML e
+          parseError      = fromXML e :: Either Text TrackResponseError
+          synthesizeError = Left . TrackResponseError Nothing
 
 instance FromXML Text TrackResponseError where
   fromXML e = do
@@ -92,15 +89,6 @@ instance FromXML Text TrackResponse where
     return $ TrackResponse (TrackingNumber tn) (TrackSummary summary) (buildHistory rChron)
     where buildHistory = fromList . reverse . map TrackDetail
 
--- instance FromXML TrackResponse where
---   fromXML e = runEitherR $ do fail1 <- return $ fmap (TrackResponse . Left) parseError
---                               return $ fmap (TrackResponse . Right) parseSuccess
-                 
---     where parseError :: Either Text TrackResponseError
---           parseError = fromXML e
---           parseSuccess :: Either Text TrackResponseSuccess
---           parseSuccess = fromXML e
-    
 elText :: Name -> Traversal' Element Text
 elText n = elLookup n . text
 
