@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types        #-}
@@ -12,10 +13,13 @@ module Web.Shipping.Tracking.USPS ( TrackingNumber(..)
                                   , HasTrackDetail(..)
                                   , TrackResponse(..)
                                   , HasTrackResponse(..)
+                                  , TrackResponseError(..)
+                                  , HasTrackResponseError(..)
                                   ) where
 
 import ClassyPrelude hiding (Element)
 import Control.Lens
+import Data.EitherR
 import qualified Data.Map as M
 import Web.Shipping.XML
 import Web.Shipping.Auth.USPS
@@ -51,20 +55,51 @@ newtype TrackDetail = TrackDetail { _detailText :: Text } deriving (Show, Eq)
 
 makeClassy ''TrackDetail
 
+data TrackResponseError =  TrackResponseError { _respErrorNumber      :: Maybe Text
+                                              , _respErrorDescription :: Text } deriving (Show, Eq)
+
+makeClassy ''TrackResponseError
+
 data TrackResponse = TrackResponse { _respTrackingNumber :: TrackingNumber
                                    , _respTrackSummary   :: TrackSummary
                                    , _respTrackDetails   :: Seq TrackDetail } deriving (Show, Eq)
 
 makeClassy ''TrackResponse
 
-instance FromXML TrackResponse where
-  fromXML e = do r        <- e  ^? elLookup "TrackResponse" ^. to (m2e "Missing TrackResponse")
-                 ti       <- r  ^? elLookup "TrackInfo"     ^. to (m2e "Missing TrackInfo")
-                 tn       <- ti ^. attribute "ID"           ^. to (m2e "Missing ID")
-                 summary  <- e  ^? elText "TrackSummary"    ^. to (m2e "Missing TrackSummary")
-                 let rChron = e  ^.. elLookup "TrackDetail" . text
-                 return $ TrackResponse (TrackingNumber tn) (TrackSummary summary) (buildHistory rChron)
+instance FromXML TrackResponseError TrackResponse where
+  fromXML e = case parseError of
+                Left _ -> case parseSuccess of
+                            Left msg      -> Left $ TrackResponseError Nothing msg
+                            Right success -> Right success
+                Right err -> Left err
+    where parseError = fromXML e :: Either Text TrackResponseError
+          parseSuccess = fromXML e :: Either Text TrackResponse
+
+instance FromXML Text TrackResponseError where
+  fromXML e = do
+    r <- e  ^? elLookup "Error"     ^. to (m2e "Missing Error")
+    let c = r ^? elText "Number"
+    d <- r  ^? elText "Description" ^. to (m2e "Missing Description")
+    return $ TrackResponseError c d
+ 
+instance FromXML Text TrackResponse where
+  fromXML e = do
+    r  <- e  ^? elLookup "TrackResponse" ^. to (m2e "Missing TrackResponse")
+    ti <- r  ^? elLookup "TrackInfo"     ^. to (m2e "Missing TrackInfo")
+    tn <- ti ^. attribute "ID"           ^. to (m2e "Missing ID")
+    summary  <- e  ^? elText "TrackSummary"    ^. to (m2e "Missing TrackSummary")
+    let rChron = e  ^.. elLookup "TrackDetail" . text
+    return $ TrackResponse (TrackingNumber tn) (TrackSummary summary) (buildHistory rChron)
     where buildHistory = fromList . reverse . map TrackDetail
+
+-- instance FromXML TrackResponse where
+--   fromXML e = runEitherR $ do fail1 <- return $ fmap (TrackResponse . Left) parseError
+--                               return $ fmap (TrackResponse . Right) parseSuccess
+                 
+--     where parseError :: Either Text TrackResponseError
+--           parseError = fromXML e
+--           parseSuccess :: Either Text TrackResponseSuccess
+--           parseSuccess = fromXML e
     
 elText :: Name -> Traversal' Element Text
 elText n = elLookup n . text

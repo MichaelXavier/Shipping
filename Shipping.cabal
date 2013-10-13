@@ -21,6 +21,7 @@ library
                        classy-prelude >= 0.6.0 && < 1.0,
                        containers,
                        bytestring,
+                       errors >= 1.4.2,
                        pcre-light == 0.4.*,
                        lens >= 3.9.1 && < 4.0,
                        text,

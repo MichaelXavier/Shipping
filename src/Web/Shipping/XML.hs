@@ -1,4 +1,5 @@
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Shipping.XML ( FromXML(..)
@@ -15,8 +16,8 @@ import Control.Lens
 import Text.XML (parseText)
 import Text.XML.Lens
 
-class FromXML t where
-  fromXML :: Element -> Either Text t
+class FromXML f t where
+  fromXML :: Element -> Either f t
 
 class ToXML t where
   toXML :: t -> Element

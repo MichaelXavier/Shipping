@@ -28,7 +28,7 @@ spec = do
 
   describe "FromXML TrackResponse" $ do
     it "parses the happy path" $ do
-      let Right resp = parseXML happyResponse :: Either Text TrackResponse
+      let Right resp = parseXML happyResponse :: Either TrackResponseError TrackResponse
       resp ^. respTrackingNumber `shouldBe` TrackingNumber "1234"
       resp ^. respTrackSummary `shouldBe` TrackSummary "Delivered a while ago"
       resp ^. respTrackDetails `shouldBe` fromList [
@@ -36,13 +36,20 @@ spec = do
                                           , TrackDetail "9AM Older"
                                           , TrackDetail "10AM Most Recent"
                                           ]
-    it "handles errors" $ pending
+    it "handles errors in the xml" $ do
+      let Left err = parseXML errorResponse :: Either TrackResponseError TrackResponse
+      err ^. respErrorNumber `shouldBe` Just "123"
+      err ^. respErrorDescription `shouldBe` "Broke"
 
-parseXML :: FromXML a => LText -> Either Text a
-parseXML txt = case parsed of
-                 Right doc -> fromXML . documentRoot $ doc
-                 Left e    -> Left . pack . show $ e
-  where parsed = parseText def txt
+    it "handles unexpected problems generically" $ do
+      let Left err = parseXML "<TrackResponse />" :: Either TrackResponseError TrackResponse
+      err ^. respErrorNumber `shouldBe` Nothing
+      err ^. respErrorDescription `shouldBe` "Missing TrackInfo"
+
+
+parseXML :: FromXML f a => LText -> Either f a
+parseXML txt = fromXML . documentRoot $ doc
+  where Right doc = parseText def txt
 
 happyResponse :: LText
 happyResponse = [qc|
@@ -53,5 +60,18 @@ happyResponse = [qc|
     <TrackDetail>9AM Older</TrackDetail>
     <TrackDetail>8AM Oldest</TrackDetail>
   </TrackInfo>
+</TrackResponse>
+|]
+
+errorResponse :: LText
+errorResponse = [qc|
+<TrackResponse>
+  <Error>
+    <Number>123</Number>
+    <Source>WhoCares</Source>
+    <Description>Broke</Description>
+    <HelpFile>dunno</HelpFile>
+    <HelpContext>dunno either</HelpContext>
+  </Error>
 </TrackResponse>
 |]
