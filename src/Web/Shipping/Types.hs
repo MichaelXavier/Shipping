@@ -10,9 +10,10 @@ module Web.Shipping.Types ( USPSTracking(..)
 import ClassyPrelude
 import Control.Lens 
 
-data USPSTracking   = USPSTracking  { _uspsTrackingNumber :: Text } deriving (Show, Eq)
-data UPSTracking    = UPSTracking   { _upsTrackingNumber :: Text } deriving (Show, Eq)
-data FedExTracking  = FedExTracking { _fedeXTrackingNumber :: Text } deriving (Show, Eq)
+-- These are now invalid
+newtype USPSTracking   = USPSTracking  { _uspsTrackingNumber :: Text } deriving (Show, Eq)
+newtype UPSTracking    = UPSTracking   { _upsTrackingNumber :: Text } deriving (Show, Eq)
+newtype FedExTracking  = FedExTracking { _fedeXTrackingNumber :: Text } deriving (Show, Eq)
 
 makeFields ''USPSTracking
 makeFields ''UPSTracking

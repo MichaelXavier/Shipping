@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -15,12 +16,21 @@ module Web.Shipping.Tracking.USPS ( TrackingNumber(..)
                                   , HasTrackResponse(..)
                                   , TrackResponseError(..)
                                   , HasTrackResponseError(..)
+                                  , TrackEvent(..)
+                                  , HasTrackEvent(..)
+                                  , getTrackingData
+                                  , RequestContext(..)
+                                  , module Web.Shipping.Auth.USPS
                                   ) where
 
 import ClassyPrelude hiding (Element)
 import Control.Lens
-import Data.EitherR
+import Control.Monad.Reader hiding (mapM)
 import qualified Data.Map as M
+import Network.Http.Client ( inputStreamBody )
+import System.IO.Streams.ByteString ( fromLazyByteString )
+import qualified System.IO.Streams as S
+import Network.HTTPMock.Types
 import Web.Shipping.XML
 import Web.Shipping.Auth.USPS
 
@@ -33,6 +43,12 @@ data TrackRequest = TrackRequest { _reqTrackingNumber :: TrackingNumber
 
 makeClassy ''TrackRequest
 
+-- is the a necessary?
+data RequestContext a = RequestContext {
+    ctxBackend :: HTTPBackend IO a
+  , ctxAuth    :: Auth
+  }
+
 reqUIDText :: Lens' TrackRequest Text
 reqUIDText = reqAuth . userId
 
@@ -40,7 +56,7 @@ reqTrackingText :: Lens' TrackRequest Text
 reqTrackingText = reqTrackingNumber . trackingText
 
 instance ToXML TrackRequest where
-  toXML r = elm & name .~ "TrackRequest"
+  toXML r = elm & name .~ "TrackFieldRequest"
                 & attrs .~ M.singleton "USERID" (r ^. reqUIDText)
                 & nodes .~ [
                   eln & _Element . name .~ "TrackingID"
@@ -60,9 +76,23 @@ data TrackResponseError =  TrackResponseError { _respErrorNumber      :: Maybe T
 
 makeClassy ''TrackResponseError
 
+data TrackEvent = TrackEvent { _eventTime            :: Text -- TODO; time
+                             , _eventDate            :: Text --TODO: combine with time?
+                             , _eventType            :: Text
+                             , _eventCity            :: Text
+                             , _eventState           :: Text
+                             , _eventZIPCode         :: Text
+                             , _eventZIPCountry      :: Maybe Text
+                             , _eventFirmName        :: Maybe Text
+                             , _eventName            :: Maybe Text
+                             , _eventAuthorizedAgent :: Maybe Bool
+                             } deriving (Show, Eq)
+
+makeClassy ''TrackEvent
+
 data TrackResponse = TrackResponse { _respTrackingNumber :: TrackingNumber
-                                   , _respTrackSummary   :: TrackSummary
-                                   , _respTrackDetails   :: Seq TrackDetail } deriving (Show, Eq)
+                                   , _respTrackSummary   :: TrackEvent
+                                   , _respTrackDetails   :: Seq TrackEvent } deriving (Show, Eq)
 
 makeClassy ''TrackResponse
 
@@ -72,28 +102,88 @@ instance FromXML TrackResponseError TrackResponse where
           parseError      = fromXML e :: Either Text TrackResponseError
           synthesizeError = Left . TrackResponseError Nothing
 
+instance FromXML Text TrackEvent where
+  fromXML e = do
+    time        <- e `elText'` "EventTime"
+    date        <- e `elText'` "EventDate"
+    et          <- e `elText'` "Event"
+    city        <- e `elText'` "EventCity"
+    state       <- e `elText'` "EventState"
+    zip         <- e `elText'` "EventZIPCode"
+    let country = e ^? elText "EventCountry"
+    let firm    = e ^? elText "EventFirmName"
+    let name    = e ^? elText "Name"
+    let aa      = e ^? elText "AuthorizedAgent" ^. to (fmap (=="true"))
+    return $ TrackEvent time date et city state zip country firm name aa
+
 instance FromXML Text TrackResponseError where
   fromXML e = do
-    r <- e  ^? elLookup "Error"     ^. to (m2e "Missing Error")
+    r     <- e  `elLookup'` "Error"
     let c = r ^? elText "Number"
-    d <- r  ^? elText "Description" ^. to (m2e "Missing Description")
+    d     <- r  `elText'` "Description"
     return $ TrackResponseError c d
  
 instance FromXML Text TrackResponse where
   fromXML e = do
-    r  <- e  ^? elLookup "TrackResponse" ^. to (m2e "Missing TrackResponse")
-    ti <- r  ^? elLookup "TrackInfo"     ^. to (m2e "Missing TrackInfo")
-    tn <- ti ^. attribute "ID"           ^. to (m2e "Missing ID")
-    summary  <- e  ^? elText "TrackSummary"    ^. to (m2e "Missing TrackSummary")
-    let rChron = e  ^.. elLookup "TrackDetail" . text
-    return $ TrackResponse (TrackingNumber tn) (TrackSummary summary) (buildHistory rChron)
-    where buildHistory = fromList . reverse . map TrackDetail
+    r  <- e  `elLookup'` "TrackResponse"
+    ti <- r  `elLookup'` "TrackInfo"
+    tn <- ti `attribute'` "ID"
+    summary       <- fromXML =<< e  `elLookup'` "TrackSummary"
+    --TODO: cleanup
+    rChronDetails <- mapM fromXML $ e ^.. elLookup "TrackDetail"
+
+    return $ TrackResponse (TrackingNumber tn) summary (buildHistory rChronDetails)
+    where buildHistory = fromList . reverse
+
+
+--TODO: handle exceptions into TrackResponseError
+--TODO: reader on auth
+getTrackingData :: ( MonadReader (RequestContext (Either TrackResponseError TrackResponse)) m
+                   , Functor m
+                   , MonadIO m
+                   , Applicative m)
+                   => TrackingNumber
+                   -> m (Either TrackResponseError TrackResponse)
+getTrackingData num = do
+  tReq       <- TrackRequest <$> pure num <*> asks ctxAuth
+  reqBackend <- asks ctxBackend
+  liftIO $ xmlRequest responseException reqBackend tReq
+
+--TODO: extract to XML or something
+xmlRequest :: (ToXML req, FromXML err resp) => (SomeException -> err) -> HTTPBackend IO (Either err resp) -> req -> IO (Either err resp)
+xmlRequest errHandler (HTTPBackend reqBackend) req = reqBackend buildRequest generateBody parseBody
+  where buildRequest = Request POST "production.shippingapis.com" 80 "/ShippingAPITest.dll" []
+        generateBody outStream = do inStream <- reqBodyStream
+                                    inputStreamBody inStream outStream
+        reqBodyStream = fromLazyByteString . renderAsDocRoot $ req
+        --TODO: handle non-200 resp
+        parseBody _resp inStream = parseFromXML errHandler . fromChunks <$> S.toList inStream
+
+responseException :: SomeException -> TrackResponseError
+responseException e = TrackResponseError Nothing (pack . show $ e)
+
+---- Helpers
 
 elText :: Name -> Traversal' Element Text
 elText n = elLookup n . text
 
+elText' :: Element -> Name -> Either Text Text
+elText' el n = el ^? elText n ^. to (m2e $ "Missing " <> n ^. _nameLocalName)
+
+attribute' :: Element -> Name -> Either Text Text
+attribute' el n = el ^. attribute n ^. to (m2e $ mconcat [ "Missing attribute "
+                                                         , n ^. _nameLocalName
+                                                         , " from "
+                                                         , el ^. localName ])
+
 elLookup :: Name -> Traversal' Element Element
 elLookup n = entire . el n
+
+elLookup' :: Element -> Name -> Either Text Element
+elLookup' el n = el ^? elLookup n ^. to (m2e $ mconcat [ "Missing element " 
+                                                       , n ^. _nameLocalName 
+                                                       , " from "
+                                                       , el ^. localName ])
 
 m2e :: b -> Maybe a -> Either b a
 m2e b = maybe (Left b) Right

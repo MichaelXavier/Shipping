@@ -20,21 +20,20 @@ spec = do
     let e    = toXML req
 
     it "produces the correct xml" $ do
-      e ^. name `shouldBe` "TrackRequest"
+      e ^. name `shouldBe` "TrackFieldRequest"
       e ^. attribute "USERID" `shouldBe` Just "UID"
       let trackingIds = e ^.. entire . el "TrackingID"
       length trackingIds `shouldBe` 1
-      (head trackingIds) ^. attribute "ID" `shouldBe` Just "1234"
+      head trackingIds ^. attribute "ID" `shouldBe` Just "1234"
 
   describe "FromXML TrackResponse" $ do
     it "parses the happy path" $ do
       let Right resp = parseXML happyResponse :: Either TrackResponseError TrackResponse
       resp ^. respTrackingNumber `shouldBe` TrackingNumber "1234"
-      resp ^. respTrackSummary `shouldBe` TrackSummary "Delivered a while ago"
+      resp ^. respTrackSummary `shouldBe` TrackEvent "12:12pm" "May 21, 2001" "DELIVERED" "NEWTON" "IA" "50208" Nothing Nothing Nothing Nothing
       resp ^. respTrackDetails `shouldBe` fromList [
-                                            TrackDetail "8AM Oldest"
-                                          , TrackDetail "9AM Older"
-                                          , TrackDetail "10AM Most Recent"
+          TrackEvent "10:00 pm" "March 27, 2001" "ACCEPTANCE" "BLAINE" "WA" "98231" Nothing Nothing Nothing Nothing
+        , TrackEvent "9:24 pm" "March 28, 2001" "ENROUTE" "DES MOINES" "IA" "50395" Nothing Nothing Nothing Nothing
                                           ]
     it "handles errors in the xml" $ do
       let Left err = parseXML errorResponse :: Either TrackResponseError TrackResponse
@@ -44,7 +43,7 @@ spec = do
     it "handles unexpected problems generically" $ do
       let Left err = parseXML "<TrackResponse />" :: Either TrackResponseError TrackResponse
       err ^. respErrorNumber `shouldBe` Nothing
-      err ^. respErrorDescription `shouldBe` "Missing TrackInfo"
+      err ^. respErrorDescription `shouldBe` "Missing element TrackInfo from TrackResponse"
 
 
 parseXML :: FromXML f a => LText -> Either f a
@@ -55,10 +54,42 @@ happyResponse :: LText
 happyResponse = [qc|
 <TrackResponse>
   <TrackInfo ID="1234">
-    <TrackSummary>Delivered a while ago</TrackSummary>
-    <TrackDetail>10AM Most Recent</TrackDetail>
-    <TrackDetail>9AM Older</TrackDetail>
-    <TrackDetail>8AM Oldest</TrackDetail>
+    <TrackSummary>
+      <EventTime>12:12pm</EventTime>
+      <EventDate>May 21, 2001</EventDate>
+      <Event>DELIVERED</Event>
+      <EventCity>NEWTON</EventCity>
+      <EventState>IA</EventState>
+      <EventZIPCode>50208</EventZIPCode>
+      <EventCountry/>
+      <FirmName></FirmName>
+      <Name></Name>
+      <AuthorizedAgent></AuthorizedAgent>
+    </TrackSummary>
+    <TrackDetail>
+      <EventTime>9:24 pm</EventTime>
+      <EventDate>March 28, 2001</EventDate>
+      <Event>ENROUTE</Event>
+      <EventCity>DES MOINES</EventCity>
+      <EventState>IA</EventState>
+      <EventZIPCode>50395</EventZIPCode>
+      <EventCountry/>
+      <FirmName/>
+      <Name/>
+      <AuthorizedAgent/>
+    </TrackDetail>
+    <TrackDetail>
+      <EventTime>10:00 pm</EventTime>
+      <EventDate>March 27, 2001</EventDate>
+      <Event>ACCEPTANCE</Event>
+      <EventCity>BLAINE</EventCity>
+      <EventState>WA</EventState>
+      <EventZIPCode>98231</EventZIPCode>
+      <EventCountry/>
+      <FirmName/>
+      <Name/>
+      <AuthorizedAgent/>
+    </TrackDetail>
   </TrackInfo>
 </TrackResponse>
 |]
